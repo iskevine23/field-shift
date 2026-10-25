@@ -11,6 +11,11 @@ def read(name):
         return f.read()
 
 
+@app.errorhandler(Exception)
+def show_error(e):
+    return f"{type(e).__name__}: {e}\n\nBASE = {BASE}\nFiles here: {sorted(os.listdir(BASE))}", 500
+
+
 @app.route("/")
 def index():
     return Response(read("report.html"), mimetype="text/html")
