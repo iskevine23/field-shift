@@ -1,5 +1,4 @@
 import math
-import os
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date
@@ -8,8 +7,9 @@ import requests
 from flask import Flask, Response, jsonify, request
 from werkzeug.exceptions import HTTPException
 
+from page import HTML
+
 app = Flask(__name__)
-BASE = os.path.dirname(os.path.abspath(__file__))
 URL = "https://power.larc.nasa.gov/api/temporal/monthly/point"
 END = date.today().year - 1  # last complete year
 MIN_START = 2001             # rainfall record start; check the POWER docs
@@ -104,16 +104,21 @@ def fdr(ps):
     return q
 
 
-def read_args():
-    lat, lon = float(request.args["lat"]), float(request.args["lon"])
-    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
-        raise ValueError("Invalid coordinates.")
+def read_season_start():
     season = request.args.get("season", "annual")
     start = int(request.args.get("start", MIN_START))
     if season not in SEASONS:
         raise ValueError("Unknown season.")
     if not (MIN_START <= start <= END - 9):
         raise ValueError(f"Start year must be between {MIN_START} and {END - 9}.")
+    return season, start
+
+
+def read_args():
+    lat, lon = float(request.args["lat"]), float(request.args["lon"])
+    if not (-90 <= lat <= 90 and -180 <= lon <= 180):
+        raise ValueError("Invalid coordinates.")
+    season, start = read_season_start()
     return round(lat, 2), round(lon, 2), season, start
 
 
@@ -127,8 +132,7 @@ def on_error(e):
 
 @app.route("/")
 def index():
-    with open(os.path.join(BASE, "index.html"), encoding="utf-8") as f:
-        return Response(f.read(), mimetype="text/html")
+    return Response(HTML, mimetype="text/html")
 
 
 @app.route("/api/meta")
@@ -173,11 +177,10 @@ def screen():
 
 @app.route("/api/compare")
 def compare():
-    season, start = read_args_no_loc()
+    season, start = read_season_start()
     var = request.args["var"]
     if var not in VARS:
         raise ValueError("Unknown variable.")
-    # ... rest of the function stays the same
 
     def one(item):
         name, (lat, lon) = item
@@ -195,16 +198,6 @@ def compare():
     for r, q in zip(ok, fdr([r["p"] for r in ok])):
         r["q"] = q
     return jsonify({"unit": VARS[var][1], "sites": rows})
-
-
-def read_args_no_loc():
-    season = request.args.get("season", "annual")
-    start = int(request.args.get("start", MIN_START))
-    if season not in SEASONS:
-        raise ValueError("Unknown season.")
-    if not (MIN_START <= start <= END - 9):
-        raise ValueError(f"Start year must be between {MIN_START} and {END - 9}.")
-    return season, start
 
 
 if __name__ == "__main__":
