@@ -5,76 +5,186 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Field Shift - Musanze</title>
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 0 auto; padding: 16px; color: #222; }
-    .advice { background: #eef6ee; border-left: 5px solid #3a8a3a; padding: 14px; border-radius: 6px; font-size: 1.1rem; }
-    .advice.warn { background: #fff4e5; border-color: #e08a00; }
-    .cards { display: flex; gap: 10px; flex-wrap: wrap; margin: 16px 0; }
-    .card { flex: 1 1 140px; background: #f5f5f5; padding: 12px; border-radius: 6px; }
-    .card b { display: block; font-size: 1.3rem; }
-    table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
-    th, td { text-align: left; padding: 6px; border-bottom: 1px solid #ddd; }
-    .note { font-size: 0.85rem; color: #555; margin-top: 20px; }
+    :root { --bg:#f4f7f4; --ink:#1d2b1d; --ok:#2e7d32; --dry:#e08a00; --wet:#1565c0; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); }
+    header, main { max-width: 900px; margin: 0 auto; padding: 0 16px; }
+    header { padding-top: 18px; }
+    header h1 { margin: 0; font-size: 1.5rem; }
+    header p { margin: 4px 0 12px; color: #555; }
+    main { padding-bottom: 40px; }
+    .hero { border-radius: 14px; padding: 20px; color: #fff; background: var(--ok); transition: background .3s; }
+    .hero.dry { background: var(--dry); }
+    .hero.wet { background: var(--wet); }
+    .hero .date { opacity: .9; font-size: .95rem; }
+    .hero .msg { font-size: 1.4rem; font-weight: 600; margin: 6px 0 10px; }
+    .tags span { display: inline-block; background: rgba(255,255,255,.25); border-radius: 999px; padding: 3px 10px; margin-right: 6px; font-size: .85rem; }
+    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
+    .card, .panel { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+    .panel { padding: 14px; }
+    .card small { color: #666; }
+    .card b { display: block; font-size: 1.5rem; }
+    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+    .controls input[type=range] { flex: 1 1 200px; }
+    button { border: 1px solid #bbb; background: #fff; border-radius: 8px; padding: 6px 12px; font-size: 1rem; cursor: pointer; }
+    button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .legend, .note { font-size: .85rem; color: #555; margin-top: 8px; }
+    .note { margin-top: 18px; }
   </style>
 </head>
 <body>
-  <h1>Field Shift</h1>
-  <p>Conditions around Musanze, from NASA POWER data.</p>
-<form method="get">
-  <label>View a past date:
-    <input type="date" name="date" min="2015-01-08" value="{{ request.args.get('date', '') }}">
-  </label>
-  <button>Show</button> <a href="/">Latest</a>
-</form>
-  {% if error %}
-    <p><b>Could not load data:</b> {{ error }}</p>
-  {% else %}
-    <p>Latest data: <b>{{ s.date }}</b></p>
+  <header>
+    <h1>Field Shift</h1>
+    <p>Rainfall and soil conditions around Musanze, from NASA POWER data</p>
+  </header>
+  <main>
+    <div id="loading">Loading NASA data (the first load can take a few seconds)...</div>
 
-    <div class="advice {% if s.dry_risk or s.heavy_rain_risk or s.low_soil_risk %}warn{% endif %}">
-      {{ s.advice }}
+    <div id="app" hidden>
+      <div class="hero" id="hero">
+        <div class="date" id="date"></div>
+        <div class="msg" id="msg"></div>
+        <div class="tags" id="tags"></div>
+      </div>
+
+      <div class="cards">
+        <div class="card"><small>Rain, last 3 days</small><b id="r3"></b></div>
+        <div class="card"><small>Rain, last 7 days</small><b id="r7"></b></div>
+        <div class="card"><small>Root-zone soil moisture</small><b id="soil"></b></div>
+      </div>
+
+      <div class="panel">
+        <div class="controls">
+          <button id="prev">&larr;</button>
+          <input type="range" id="slider" min="0" max="0" value="0">
+          <button id="next">&rarr;</button>
+          <button id="play">Play</button>
+          <button id="latest">Latest</button>
+        </div>
+        <div class="controls">
+          <span>Show:</span>
+          <button class="range active" data-n="90">90 days</button>
+          <button class="range" data-n="365">1 year</button>
+        </div>
+        <canvas id="chart" height="240"></canvas>
+        <div class="legend">Click the chart or drag the slider to travel through time. Orange bars: dry or low-soil flag. Dark blue bars: heavy-rain flag. Black bar: the selected day.</div>
+      </div>
     </div>
 
-    <div class="cards">
-      <div class="card">Rain, last 3 days<b>{{ s.rain_3d }} mm</b></div>
-      <div class="card">Rain, last 7 days<b>{{ s.rain_7d }} mm</b></div>
-      <div class="card">Root-zone soil moisture<b>{{ s.soil }}</b></div>
-    </div>
-        <h3>Last 90 days</h3>
-    <canvas id="chart" height="220"></canvas>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-    <script>
-      const c = {{ s.chart | tojson }};
-      new Chart(document.getElementById("chart"), {
+    <p class="note">
+      Flags compare conditions with the same calendar month from 2015 to now. They show unusual
+      conditions relative to local history, not crop-specific thresholds. Data is gridded and
+      covers the wider Musanze area, not a single farm.
+    </p>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+  <script>
+    let days = [], sel = 0, view = 90, chart = null, timer = null;
+    const $ = id => document.getElementById(id);
+    const offset = () => days.length - view;
+
+    fetch("/api/timeline")
+      .then(r => r.json())
+      .then(data => {
+        if (data.error) throw new Error(data.error);
+        days = data;
+        view = Math.min(view, days.length);
+        sel = days.length - 1;
+        $("loading").hidden = true;
+        $("app").hidden = false;
+        buildChart();
+        show(sel);
+      })
+      .catch(e => { $("loading").textContent = "Could not load data: " + e.message; });
+
+    function barColors() {
+      const off = offset();
+      return days.slice(off).map((d, i) => {
+        if (off + i === sel) return "#111";
+        if (d.wet) return "#0d47a1";
+        if (d.dry || d.low) return "#e08a00";
+        return "#90b4dc";
+      });
+    }
+
+    function buildChart() {
+      sel = Math.max(sel, offset());
+      const off = offset(), part = days.slice(off);
+      if (chart) chart.destroy();
+      chart = new Chart($("chart"), {
         data: {
-          labels: c.labels,
+          labels: part.map(d => d.date),
           datasets: [
-            {type: "bar", label: "Rain (mm/day)", data: c.rain, yAxisID: "y", backgroundColor: "#7aa7d9"},
-            {type: "line", label: "Soil moisture", data: c.soil, yAxisID: "y2", borderColor: "#3a8a3a", pointRadius: 0},
-            {type: "line", label: "Low-soil threshold (that month)", data: c.soil_thr, yAxisID: "y2", borderColor: "#e08a00", borderDash: [5, 5], pointRadius: 0}
+            { type: "bar", label: "Rain (mm/day)", data: part.map(d => d.rain), yAxisID: "y", backgroundColor: barColors() },
+            { type: "line", label: "Soil moisture", data: part.map(d => d.soil), yAxisID: "y2", borderColor: "#2e7d32", pointRadius: 0, borderWidth: 2 },
+            { type: "line", label: "Low-soil threshold (that month)", data: part.map(d => d.soil_thr), yAxisID: "y2", borderColor: "#e08a00", borderDash: [5, 5], pointRadius: 0, borderWidth: 1.5 }
           ]
         },
         options: {
+          responsive: true,
+          interaction: { mode: "index", intersect: false },
+          onClick: evt => {
+            const pts = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
+            if (pts.length) { stop(); show(offset() + pts[0].index); }
+          },
           scales: {
-            y: {title: {display: true, text: "Rain (mm)"}},
-            y2: {position: "right", title: {display: true, text: "Soil moisture"}, grid: {drawOnChartArea: false}}
+            x: { ticks: { maxTicksLimit: 8 } },
+            y: { title: { display: true, text: "Rain (mm)" } },
+            y2: { position: "right", title: { display: true, text: "Soil moisture" }, grid: { drawOnChartArea: false } }
           }
         }
       });
-    </script>
+      $("slider").min = off;
+      $("slider").max = days.length - 1;
+    }
 
-    <h3>Last 14 days</h3>
-    <table>
-      <tr><th>Date</th><th>Rain (mm)</th><th>Soil</th><th>Flags</th></tr>
-      {% for d in s.recent %}
-      <tr><td>{{ d.date }}</td><td>{{ d.rain }}</td><td>{{ d.soil }}</td><td>{{ d.flags }}</td></tr>
-      {% endfor %}
-    </table>
-  {% endif %}
+    function show(i) {
+      sel = i;
+      const d = days[i];
+      $("slider").value = i;
+      $("date").textContent = new Date(d.date + "T00:00:00Z").toLocaleDateString("en-GB",
+        { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+      $("hero").className = "hero" + (d.wet ? " wet" : (d.dry || d.low) ? " dry" : "");
+      $("msg").textContent = d.advice;
+      const tags = [];
+      if (d.dry) tags.push("Dry spell");
+      if (d.wet) tags.push("Heavy rain");
+      if (d.low) tags.push("Low soil moisture");
+      $("tags").innerHTML = tags.map(t => "<span>" + t + "</span>").join("");
+      $("r3").textContent = d.rain_3d + " mm";
+      $("r7").textContent = d.rain_7d + " mm";
+      $("soil").textContent = d.soil;
+      if (chart) {
+        chart.data.datasets[0].backgroundColor = barColors();
+        chart.update("none");
+      }
+    }
 
-  <p class="note">
-    Flags compare current conditions with the same calendar month over 2015 to now.
-    They show unusual conditions relative to local history, not crop-specific thresholds.
-    Data is gridded and covers the wider Musanze area, not a single farm.
-  </p>
+    function stop() {
+      if (timer) { clearInterval(timer); timer = null; $("play").textContent = "Play"; }
+    }
+
+    $("slider").oninput = e => { stop(); show(+e.target.value); };
+    $("prev").onclick = () => { stop(); show(Math.max(offset(), sel - 1)); };
+    $("next").onclick = () => { stop(); show(Math.min(days.length - 1, sel + 1)); };
+    $("latest").onclick = () => { stop(); show(days.length - 1); };
+    $("play").onclick = () => {
+      if (timer) return stop();
+      if (sel >= days.length - 1) sel = offset();
+      $("play").textContent = "Pause";
+      timer = setInterval(() => {
+        if (sel >= days.length - 1) return stop();
+        show(sel + 1);
+      }, 150);
+    };
+    document.querySelectorAll("button.range").forEach(b => b.onclick = () => {
+      stop();
+      view = Math.min(+b.dataset.n, days.length);
+      document.querySelectorAll("button.range").forEach(x => x.classList.toggle("active", x === b));
+      buildChart();
+      show(sel);
+    });
+  </script>
 </body>
 </html>
