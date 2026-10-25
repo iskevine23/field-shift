@@ -1,190 +1,109 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Field Shift - Musanze</title>
-  <style>
-    :root { --bg:#f4f7f4; --ink:#1d2b1d; --ok:#2e7d32; --dry:#e08a00; --wet:#1565c0; }
-    * { box-sizing: border-box; }
-    body { margin:0; font-family: system-ui, sans-serif; background:var(--bg); color:var(--ink); }
-    header, main { max-width: 900px; margin: 0 auto; padding: 0 16px; }
-    header { padding-top: 18px; }
-    header h1 { margin: 0; font-size: 1.5rem; }
-    header p { margin: 4px 0 12px; color: #555; }
-    main { padding-bottom: 40px; }
-    .hero { border-radius: 14px; padding: 20px; color: #fff; background: var(--ok); transition: background .3s; }
-    .hero.dry { background: var(--dry); }
-    .hero.wet { background: var(--wet); }
-    .hero .date { opacity: .9; font-size: .95rem; }
-    .hero .msg { font-size: 1.4rem; font-weight: 600; margin: 6px 0 10px; }
-    .tags span { display: inline-block; background: rgba(255,255,255,.25); border-radius: 999px; padding: 3px 10px; margin-right: 6px; font-size: .85rem; }
-    .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 14px 0; }
-    .card, .panel { background: #fff; border-radius: 12px; padding: 12px; box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-    .panel { padding: 14px; }
-    .card small { color: #666; }
-    .card b { display: block; font-size: 1.5rem; }
-    .controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-    .controls input[type=range] { flex: 1 1 200px; }
-    button { border: 1px solid #bbb; background: #fff; border-radius: 8px; padding: 6px 12px; font-size: 1rem; cursor: pointer; }
-    button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
-    .legend, .note { font-size: .85rem; color: #555; margin-top: 8px; }
-    .note { margin-top: 18px; }
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Field Shift</h1>
-    <p>Rainfall and soil conditions around Musanze, from NASA POWER data</p>
-  </header>
-  <main>
-    <div id="loading">Loading NASA data (the first load can take a few seconds)...</div>
+<html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Earth System Trend Detective</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#eef2f6;color:#14202e}
+header{background:linear-gradient(135deg,#0d2a4a,#1565c0);color:#fff;padding:22px 16px 56px}
+.w{max-width:1000px;margin:0 auto}h1{margin:0;font-size:1.7rem}header p{margin:6px 0 0;opacity:.85}
+main{max-width:1000px;margin:-36px auto 40px;padding:0 16px;display:grid;gap:14px}
+.box{background:#fff;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.controls{display:flex;gap:12px;flex-wrap:wrap}.controls label{display:flex;flex-direction:column;font-size:.8rem;color:#555;gap:3px}
+select{padding:7px;border-radius:8px;border:1px solid #bbb;font-size:1rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+#map{height:340px;border-radius:10px}h3{margin:0 0 8px}
+.badge{display:inline-block;padding:4px 12px;border-radius:99px;color:#fff;font-weight:600;margin:8px 0}
+.badge.yes{background:#2e7d32}.badge.no{background:#757575}
+table{width:100%;border-collapse:collapse;font-size:.9rem}th,td{text-align:left;padding:6px;border-bottom:1px solid #e3e8ee}
+tr[data-v]{cursor:pointer}tr.sel{background:#e8f1fb}small,.note{color:#555;font-size:.85rem}#status{font-size:.9rem;color:#555}
+</style></head><body>
+<header><div class="w"><h1>Earth System Trend Detective</h1>
+<p>Pick a place, a variable and a season. See what is changing, how much, and whether it is statistically significant.</p></div></header>
+<main>
+<div class="box"><div class="controls">
+<label>Variable<select id="v"></select></label>
+<label>Season<select id="s"></select></label>
+<label>From year<select id="y"></select></label>
+</div><div id="status">Click the map to choose a location.</div></div>
 
-    <div id="app" hidden>
-      <div class="hero" id="hero">
-        <div class="date" id="date"></div>
-        <div class="msg" id="msg"></div>
-        <div class="tags" id="tags"></div>
-      </div>
+<div class="grid">
+<div class="box"><h3>Where</h3><div id="map"></div>
+<small>Blue pin = your point. Coloured dots = 5 Rwandan sites for the chosen variable: orange rising, blue falling (both only if significant), grey not significant.</small></div>
+<div class="box"><h3>What and how much</h3><div id="headline">Loading...</div><div id="verdict" class="badge no"></div>
+<canvas id="chart" height="230"></canvas></div></div>
 
-      <div class="cards">
-        <div class="card"><small>Rain, last 3 days</small><b id="r3"></b></div>
-        <div class="card"><small>Rain, last 7 days</small><b id="r7"></b></div>
-        <div class="card"><small>Root-zone soil moisture</small><b id="soil"></b></div>
-      </div>
+<div class="box"><h3>Which variables are changing here?</h3>
+<small>All 8 variables tested at the clicked point. "q" corrects for running 8 tests; use it, not p, to decide. Click a row to see it.</small>
+<table><thead><tr><th>Variable</th><th>Change per decade</th><th>p</th><th>q</th><th>Significant</th></tr></thead><tbody id="screen"></tbody></table></div>
 
-      <div class="panel">
-        <div class="controls">
-          <button id="prev">&larr;</button>
-          <input type="range" id="slider" min="0" max="0" value="0">
-          <button id="next">&rarr;</button>
-          <button id="play">Play</button>
-          <button id="latest">Latest</button>
-        </div>
-        <div class="controls">
-          <span>Show:</span>
-          <button class="range active" data-n="90">90 days</button>
-          <button class="range" data-n="365">1 year</button>
-        </div>
-        <canvas id="chart" height="240"></canvas>
-        <div class="legend">Click the chart or drag the slider to travel through time. Orange bars: dry or low-soil flag. Dark blue bars: heavy-rain flag. Black bar: the selected day.</div>
-      </div>
-    </div>
+<div class="box"><h3>Same variable, different regions</h3>
+<table><thead><tr><th>Site</th><th>Change per decade</th><th>p</th><th>q</th><th>Significant</th></tr></thead><tbody id="compare"></tbody></table></div>
 
-    <p class="note">
-      Flags compare conditions with the same calendar month from 2015 to now. They show unusual
-      conditions relative to local history, not crop-specific thresholds. Data is gridded and
-      covers the wider Musanze area, not a single farm.
-    </p>
-  </main>
+<div class="box"><h3>Method and limits</h3>
+<p class="note"><b>Data:</b> NASA POWER monthly values (satellite- and model-derived, gridded). For each year, the chosen months are averaged, giving about 25 yearly values. <b>Tests:</b> Mann-Kendall trend test (normal approximation, tie-corrected) and Sen's slope. <b>Multiple tests:</b> Benjamini-Hochberg correction in the two tables.</p>
+<p class="note"><b>Limits:</b> about 25 points is short for climate trends; year-to-year memory (autocorrelation) is not corrected, which can make trends look more significant than they are; the data is gridded and model-based, so it describes a wide area; "significant" does not mean "important". Season groups are a simple choice for Rwanda. Only NASA POWER variables are included; no satellite image layers yet.</p></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
+<script>
+const $=id=>document.getElementById(id);
+const st={lat:-1.5,lon:29.63,v:"PRECTOTCORR",s:"annual",y:2001};
+let chart,siteMarkers=[],seq=0;
+const map=L.map("map").setView([-1.95,29.9],8);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"&copy; OpenStreetMap"}).addTo(map);
+const pin=L.marker([st.lat,st.lon]).addTo(map);
+map.on("click",e=>setLoc(e.latlng.lat,e.latlng.lng));
+const fmt=x=>x==null?"-":Math.abs(x)>=100?x.toFixed(0):Math.abs(x)>=1?x.toFixed(2):x.toFixed(3);
+const pf=p=>p<0.001?"<0.001":p.toFixed(3);
+async function get(u){const r=await fetch(u),j=await r.json();if(!r.ok||j.error)throw new Error(j.error||r.status);return j}
+function setLoc(lat,lon){st.lat=+(+lat).toFixed(2);st.lon=+(+lon).toFixed(2);pin.setLatLng([st.lat,st.lon]);run()}
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script>
-  <script>
-    let days = [], sel = 0, view = 90, chart = null, timer = null;
-    const $ = id => document.getElementById(id);
-    const offset = () => days.length - view;
-
-    fetch("/api/timeline")
-      .then(r => r.json())
-      .then(data => {
-        if (data.error) throw new Error(data.error);
-        days = data;
-        view = Math.min(view, days.length);
-        sel = days.length - 1;
-        $("loading").hidden = true;
-        $("app").hidden = false;
-        buildChart();
-        show(sel);
-      })
-      .catch(e => { $("loading").textContent = "Could not load data: " + e.message; });
-
-    function barColors() {
-      const off = offset();
-      return days.slice(off).map((d, i) => {
-        if (off + i === sel) return "#111";
-        if (d.wet) return "#0d47a1";
-        if (d.dry || d.low) return "#e08a00";
-        return "#90b4dc";
-      });
-    }
-
-    function buildChart() {
-      sel = Math.max(sel, offset());
-      const off = offset(), part = days.slice(off);
-      if (chart) chart.destroy();
-      chart = new Chart($("chart"), {
-        data: {
-          labels: part.map(d => d.date),
-          datasets: [
-            { type: "bar", label: "Rain (mm/day)", data: part.map(d => d.rain), yAxisID: "y", backgroundColor: barColors() },
-            { type: "line", label: "Soil moisture", data: part.map(d => d.soil), yAxisID: "y2", borderColor: "#2e7d32", pointRadius: 0, borderWidth: 2 },
-            { type: "line", label: "Low-soil threshold (that month)", data: part.map(d => d.soil_thr), yAxisID: "y2", borderColor: "#e08a00", borderDash: [5, 5], pointRadius: 0, borderWidth: 1.5 }
-          ]
-        },
-        options: {
-          responsive: true,
-          interaction: { mode: "index", intersect: false },
-          onClick: evt => {
-            const pts = chart.getElementsAtEventForMode(evt, "index", { intersect: false }, true);
-            if (pts.length) { stop(); show(offset() + pts[0].index); }
-          },
-          scales: {
-            x: { ticks: { maxTicksLimit: 8 } },
-            y: { title: { display: true, text: "Rain (mm)" } },
-            y2: { position: "right", title: { display: true, text: "Soil moisture" }, grid: { drawOnChartArea: false } }
-          }
-        }
-      });
-      $("slider").min = off;
-      $("slider").max = days.length - 1;
-    }
-
-    function show(i) {
-      sel = i;
-      const d = days[i];
-      $("slider").value = i;
-      $("date").textContent = new Date(d.date + "T00:00:00Z").toLocaleDateString("en-GB",
-        { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
-      $("hero").className = "hero" + (d.wet ? " wet" : (d.dry || d.low) ? " dry" : "");
-      $("msg").textContent = d.advice;
-      const tags = [];
-      if (d.dry) tags.push("Dry spell");
-      if (d.wet) tags.push("Heavy rain");
-      if (d.low) tags.push("Low soil moisture");
-      $("tags").innerHTML = tags.map(t => "<span>" + t + "</span>").join("");
-      $("r3").textContent = d.rain_3d + " mm";
-      $("r7").textContent = d.rain_7d + " mm";
-      $("soil").textContent = d.soil;
-      if (chart) {
-        chart.data.datasets[0].backgroundColor = barColors();
-        chart.update("none");
-      }
-    }
-
-    function stop() {
-      if (timer) { clearInterval(timer); timer = null; $("play").textContent = "Play"; }
-    }
-
-    $("slider").oninput = e => { stop(); show(+e.target.value); };
-    $("prev").onclick = () => { stop(); show(Math.max(offset(), sel - 1)); };
-    $("next").onclick = () => { stop(); show(Math.min(days.length - 1, sel + 1)); };
-    $("latest").onclick = () => { stop(); show(days.length - 1); };
-    $("play").onclick = () => {
-      if (timer) return stop();
-      if (sel >= days.length - 1) sel = offset();
-      $("play").textContent = "Pause";
-      timer = setInterval(() => {
-        if (sel >= days.length - 1) return stop();
-        show(sel + 1);
-      }, 150);
-    };
-    document.querySelectorAll("button.range").forEach(b => b.onclick = () => {
-      stop();
-      view = Math.min(+b.dataset.n, days.length);
-      document.querySelectorAll("button.range").forEach(x => x.classList.toggle("active", x === b));
-      buildChart();
-      show(sel);
-    });
-  </script>
-</body>
-</html>
+async function init(){
+  const m=await get("/api/meta");
+  $("v").innerHTML=m.vars.map(v=>`<option value="${v.id}">${v.name} (${v.unit})</option>`).join("");
+  $("s").innerHTML=m.seasons.map(s=>`<option value="${s.id}">${s.name}</option>`).join("");
+  let ys="";for(let y=m.min_start;y<=m.max_start;y++)ys+=`<option>${y}</option>`;$("y").innerHTML=ys;
+  $("v").value=st.v;$("s").value=st.s;$("y").value=st.y;
+  $("v").onchange=e=>{st.v=e.target.value;run()};$("s").onchange=e=>{st.s=e.target.value;run()};$("y").onchange=e=>{st.y=+e.target.value;run()};
+  run();
+}
+async function run(){
+  const my=++seq;$("status").textContent="Loading NASA data...";
+  const q=`lat=${st.lat}&lon=${st.lon}&season=${st.s}&start=${st.y}`;
+  try{
+    const [t,sc,c]=await Promise.all([get(`/api/trend?${q}&var=${st.v}`),get(`/api/screen?${q}`),get(`/api/compare?season=${st.s}&start=${st.y}&var=${st.v}`)]);
+    if(my!==seq)return;
+    renderTrend(t);renderScreen(sc);renderCompare(c);
+    $("status").textContent=`Location ${st.lat}, ${st.lon}`;
+  }catch(e){if(my===seq)$("status").textContent="Could not load data: "+e.message}
+}
+function renderTrend(t){
+  const dir=t.slope_decade>0?"rising":t.slope_decade<0?"falling":"flat";
+  const last=t.years[t.years.length-1],sig=t.p<0.05;
+  $("headline").innerHTML=`<b>${t.name}</b>, ${t.season_label}: ${dir}`+(dir=="flat"?"":` by <b>${fmt(Math.abs(t.slope_decade))} ${t.unit} per decade</b> (${fmt(Math.abs(t.change_total))} ${t.unit} from ${t.years[0]} to ${last})`)+`.`;
+  $("verdict").className="badge "+(sig?"yes":"no");
+  $("verdict").textContent=(sig?"Statistically significant":"Not significant")+` (p = ${pf(t.p)}, ${t.n} years)`;
+  if(chart)chart.destroy();
+  chart=new Chart($("chart"),{type:"line",data:{labels:t.years,datasets:[
+    {label:t.name,data:t.values,borderColor:"#1565c0",pointRadius:3},
+    {label:"Sen's slope trend",data:t.line,borderColor:"#e08a00",borderDash:[6,4],pointRadius:0}]},
+    options:{scales:{y:{title:{display:true,text:t.unit}}}}});
+}
+function renderScreen(rows){
+  $("screen").innerHTML=rows.map(r=>r.error?`<tr><td>${r.name}</td><td colspan="4">${r.error}</td></tr>`:
+   `<tr data-v="${r.id}" class="${r.id==st.v?"sel":""}"><td>${r.name}</td><td>${fmt(r.slope_decade)} ${r.unit}</td><td>${pf(r.p)}</td><td>${pf(r.q)}</td><td>${r.q<0.05?"Yes":"No"}</td></tr>`).join("");
+  document.querySelectorAll("#screen tr[data-v]").forEach(tr=>tr.onclick=()=>{st.v=tr.dataset.v;$("v").value=st.v;run()});
+}
+function renderCompare(c){
+  siteMarkers.forEach(m=>m.remove());siteMarkers=[];
+  $("compare").innerHTML=c.sites.map(s=>{
+    if(s.error)return`<tr><td>${s.name}</td><td colspan="4">${s.error}</td></tr>`;
+    const sig=s.q<0.05,col=!sig?"#888":s.slope_decade>0?"#e08a00":"#1565c0";
+    const m=L.circleMarker([s.lat,s.lon],{radius:9,color:"#fff",weight:2,fillColor:col,fillOpacity:1,bubblingMouseEvents:false}).addTo(map)
+      .bindTooltip(`${s.name}: ${fmt(s.slope_decade)} ${c.unit}/decade`);
+    m.on("click",()=>setLoc(s.lat,s.lon));siteMarkers.push(m);
+    return`<tr><td>${s.name}</td><td>${fmt(s.slope_decade)} ${c.unit}</td><td>${pf(s.p)}</td><td>${pf(s.q)}</td><td>${sig?"Yes":"No"}</td></tr>`}).join("");
+}
+init();
+</script></body></html>
