@@ -1,0 +1,72 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1"><title>Field Shift</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{--ok:#2e7d32;--dry:#e08a00;--wet:#1565c0;--ink:#16241a}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,sans-serif;background:#eef3ee;color:var(--ink)}
+.top{background:linear-gradient(135deg,#12351f,#2e7d32);color:#fff;padding:22px 16px 60px}
+.w{max-width:960px;margin:0 auto}.top h1{margin:0;font-size:1.8rem}.top p{opacity:.85;margin:6px 0 0}
+.lang{float:right}.lang button{background:rgba(255,255,255,.15);color:#fff;border:0;padding:6px 10px;margin-left:4px;border-radius:6px;cursor:pointer}
+.lang button.on{background:#fff;color:#12351f}
+main{max-width:960px;margin:-40px auto 40px;padding:0 16px;display:grid;gap:14px}
+.box{background:#fff;border-radius:14px;padding:14px;box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.hero{color:#fff;background:var(--ok);transition:.3s}.hero.d{background:var(--dry)}.hero.w{background:var(--wet)}
+.hero h2{margin:0 0 4px}.hero .m{font-size:1.3rem;font-weight:600}.tag{display:inline-block;background:rgba(255,255,255,.25);border-radius:99px;padding:2px 10px;margin:8px 6px 0 0;font-size:.85rem}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}@media(max-width:700px){.grid{grid-template-columns:1fr}}
+#map{height:320px;border-radius:10px}.cards{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px}
+.cards div{background:#f3f7f3;border-radius:10px;padding:8px;font-size:.8rem}.cards b{display:block;font-size:1.2rem}
+.ctl{display:flex;gap:6px;align-items:center}.ctl input{flex:1}button.b{border:1px solid #bbb;background:#fff;border-radius:8px;padding:6px 10px;cursor:pointer}
+.chips button{margin:0 6px 6px 0;border:1px solid var(--ok);background:#fff;color:var(--ok);border-radius:99px;padding:6px 12px;cursor:pointer}
+#ans{background:#f3f7f3;border-radius:10px;padding:10px;min-height:48px;white-space:pre-line}
+small{color:#555}h3{margin:0 0 8px}
+</style></head><body>
+<div class="top"><div class="w"><div class="lang" id="lang"></div><h1>Field Shift</h1><p data-t="sub"></p></div></div>
+<main>
+<div class="box hero" id="hero"><h2 id="hs"></h2><small id="hd" style="color:#fff;opacity:.9"></small><div class="m" id="hm"></div><div id="ht"></div></div>
+<div class="grid"><div class="box"><h3 data-t="map"></h3><div id="map"></div><small data-t="mapn"></small></div>
+<div class="box"><div class="cards"><div><span data-t="r3"></span><b id="c1"></b></div><div><span data-t="r7"></span><b id="c2"></b></div><div><span data-t="sm"></span><b id="c3"></b></div></div>
+<canvas id="ch" height="200"></canvas></div></div>
+<div class="box"><div class="ctl"><button class="b" id="pv">&larr;</button><input type="range" id="sl"><button class="b" id="nx">&rarr;</button><button class="b" id="pl"></button><button class="b" id="lt"></button></div></div>
+<div class="box"><h3 data-t="bot"></h3><div class="chips" id="chips"></div><div id="ans"></div><small data-t="botn"></small></div>
+<div class="box"><h3 data-t="abt"></h3><p data-t="built"></p><p data-t="plan"></p><p data-t="lim"></p></div>
+</main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1"></script><script src="data.js"></script>
+<script>
+const T={en:{sub:"Rainfall and soil conditions across Rwanda from NASA POWER data",map:"Map (click a site)",mapn:"Marker colour = status on the selected day.",r3:"Rain 3 days",r7:"Rain 7 days",sm:"Soil moisture",bot:"Guided assistant",botn:"Not an AI model: it answers fixed questions from the data on this page.",abt:"About this report",
+built:"Working now: NASA POWER data for 5 sites (last 365 days), monthly-adjusted dry, heavy-rain and low-soil flags, map, timeline, 3 languages.",plan:"Planned, not built: crop-specific thresholds, pest-risk flags, SMS alerts, an AI chatbot, live data refresh, more sites.",lim:"Limits: data is gridded (not farm-level); flags compare with the same month since 2015, they are not agronomic thresholds; site coordinates are approximate; Kinyarwanda text needs review by a native speaker.",
+ok:"Conditions look normal for this time of year.",dry:"Drier than usual for this time of year: consider delaying planting or watering.",wet:"Heavy rain recently: check drainage and watch for pests and erosion.",
+fd:"Dry spell",fw:"Heavy rain",fl:"Low soil moisture",play:"Play",pause:"Pause",late:"Latest",q1:"Which areas are flagged?",q2:"What do the flags mean?",q3:"How reliable is this?",none:"No site is flagged on this day.",flagged:"Flagged on this day:",
+a2:"Dry spell: little rain in 7 days and falling soil moisture. Heavy rain: 3-day rain in the top 5% for that month. Low soil moisture: in the lowest 15% for that month. All are relative to local history since 2015.",a3:"The data is real NASA POWER data, but it is gridded and model-based, so it describes a wide area, not a farm. Flags show unusual conditions, not crop damage. One unexplained jump in soil moisture was found on 1 Sep 2026 and not corrected."},
+fr:{sub:"Pluie et humidité du sol au Rwanda, à partir des données NASA POWER",map:"Carte (cliquez sur un site)",mapn:"Couleur du marqueur = état au jour choisi.",r3:"Pluie 3 jours",r7:"Pluie 7 jours",sm:"Humidité du sol",bot:"Assistant guidé",botn:"Ce n'est pas un modèle d'IA : il répond à des questions fixes à partir des données de la page.",abt:"À propos",
+built:"Fonctionne : données NASA POWER pour 5 sites (365 derniers jours), alertes sécheresse, forte pluie et sol sec ajustées par mois, carte, chronologie, 3 langues.",plan:"Prévu, non réalisé : seuils par culture, risque de ravageurs, alertes SMS, chatbot IA, actualisation en direct, plus de sites.",lim:"Limites : données maillées (pas à l'échelle d'une ferme) ; les alertes se comparent au même mois depuis 2015, ce ne sont pas des seuils agronomiques ; coordonnées approximatives.",
+ok:"Les conditions sont normales pour cette période de l'année.",dry:"Plus sec que d'habitude pour cette période : envisagez de retarder les semis ou d'irriguer.",wet:"Forte pluie récente : vérifiez le drainage et surveillez ravageurs et érosion.",
+fd:"Période sèche",fw:"Forte pluie",fl:"Sol peu humide",play:"Lecture",pause:"Pause",late:"Dernier",q1:"Quelles zones sont signalées ?",q2:"Que signifient les alertes ?",q3:"Est-ce fiable ?",none:"Aucun site n'est signalé ce jour-là.",flagged:"Signalés ce jour-là :",
+a2:"Période sèche : peu de pluie sur 7 jours et humidité en baisse. Forte pluie : pluie sur 3 jours parmi les 5 % les plus hautes du mois. Sol peu humide : parmi les 15 % les plus bas du mois. Tout est relatif à l'historique local depuis 2015.",a3:"Les données NASA POWER sont réelles mais maillées et issues de modèles : elles décrivent une zone large, pas une ferme. Un saut inexpliqué de l'humidité du sol a été trouvé le 1er sept. 2026, non corrigé."},
+rw:{sub:"Imvura n'ubuhehere bw'ubutaka mu Rwanda, bishingiye ku makuru ya NASA POWER",map:"Ikarita (kanda ahantu)",mapn:"Ibara ry'ikimenyetso = uko bimeze kuri uwo munsi.",r3:"Imvura y'iminsi 3",r7:"Imvura y'iminsi 7",sm:"Ubuhehere bw'ubutaka",bot:"Umufasha",botn:"Si porogaramu ya AI: asubiza ibibazo bihamye akoresheje amakuru ari kuri uru rupapuro.",abt:"Ibyerekeye iyi raporo",
+built:"Bikora: amakuru ya NASA POWER y'ahantu 5 (iminsi 365 ishize), ibimenyetso by'izuba ryinshi, imvura nyinshi n'ubutaka bwumutse, ikarita, igihe, indimi 3.",plan:"Biteganyijwe, bitarakorwa: imipaka ya buri gihingwa, ibyago by'udukoko, ubutumwa bwa SMS, chatbot ya AI, ahantu hanshi.",lim:"Aho bigarukira: amakuru ntagaragaza umurima umwe; ibimenyetso bigereranywa n'ukwezi kumwe guhera 2015; aho hantu ni ibigereranyo. Ubu Kinyarwanda bukeneye kugenzurwa n'uburuvuga.",
+ok:"Ibihe bimeze nk'uko bisanzwe muri iki gihe cy'umwaka.",dry:"Imvura ni nke kurusha uko bisanzwe muri iki gihe: tekereza gutinza gutera cyangwa kuhira.",wet:"Hari imvura nyinshi iheruka: genzura imiyoboro y'amazi, witondere udukoko n'isuri.",
+fd:"Imvura nke",fw:"Imvura nyinshi",fl:"Ubutaka bwumutse",play:"Tangira",pause:"Hagarara",late:"Iheruka",q1:"Ni hehe hari ikimenyetso?",q2:"Ibimenyetso bisobanura iki?",q3:"Byizewe bite?",none:"Nta hantu hari ikimenyetso kuri uwo munsi.",flagged:"Hari ikimenyetso kuri uwo munsi:",
+a2:"Imvura nke: imvura nke mu minsi 7 n'ubuhehere buri kugabanuka. Imvura nyinshi: imvura y'iminsi 3 iri mu 5% by'ejuru muri uko kwezi. Ubutaka bwumutse: buri mu 15% by'ahasi. Byose bigereranywa n'amateka y'aho guhera 2015.",a3:"Amakuru ya NASA POWER ni ay'ukuri, ariko avuga agace kanini, ntavuga umurima umwe. Habonetse impinduka itasobanutse mu buhehere ku itariki 1 Nzeri 2026, ntiyakosowe."}};
+let L_="en",S=0,D=DATA.dates.length-1,tm=null,chart,markers=[];const $=i=>document.getElementById(i),t=k=>T[L_][k];
+const st=(s,i)=>{const f=s.f[i];return f&2?"w":f&5?"d":"ok"},col={ok:"#2e7d32",d:"#e08a00",w:"#1565c0"};
+const map=L.map("map").setView([-1.95,29.9],8);L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png",{attribution:"&copy; OpenStreetMap"}).addTo(map);
+DATA.sites.forEach((s,i)=>{const m=L.circleMarker([s.lat,s.lon],{radius:11,weight:2,color:"#fff",fillOpacity:1}).addTo(map).bindTooltip(s.name);m.on("click",()=>{S=i;draw()});markers.push(m)});
+chart=new Chart($("ch"),{data:{labels:DATA.dates,datasets:[{type:"bar",data:[],yAxisID:"y",label:"mm"},{type:"line",data:[],yAxisID:"y2",borderColor:"#2e7d32",pointRadius:0},{type:"line",data:[],yAxisID:"y2",borderColor:"#e08a00",borderDash:[4,4],pointRadius:0}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{maxTicksLimit:6}},y:{},y2:{position:"right",grid:{drawOnChartArea:false}}},onClick:(e)=>{const p=chart.getElementsAtEventForMode(e,"index",{intersect:false},true);if(p.length){stop();D=p[0].index;draw()}}}});
+$("sl").max=D;
+function draw(){const s=DATA.sites[S],c=st(s,D),f=s.f[D];$("sl").value=D;
+$("hs").textContent=s.name;$("hd").textContent=DATA.dates[D];$("hm").textContent=t(c=="w"?"wet":c=="d"?"dry":"ok");$("hero").className="box hero "+(c=="ok"?"":c);
+$("ht").innerHTML=[[1,"fd"],[2,"fw"],[4,"fl"]].filter(x=>f&x[0]).map(x=>`<span class="tag">${t(x[1])}</span>`).join("");
+$("c1").textContent=s.r3[D]+" mm";$("c2").textContent=s.r7[D]+" mm";$("c3").textContent=s.soil[D];
+markers.forEach((m,i)=>m.setStyle({fillColor:col[st(DATA.sites[i],D)],weight:i==S?4:2,color:i==S?"#111":"#fff"}));
+chart.data.datasets[0].data=s.rain;chart.data.datasets[0].backgroundColor=s.f.map((v,i)=>i==D?"#111":v&2?"#0d47a1":v&5?"#e08a00":"#90b4dc");
+chart.data.datasets[1].data=s.soil;chart.data.datasets[2].data=s.st;chart.update("none")}
+function stop(){if(tm){clearInterval(tm);tm=null;$("pl").textContent=t("play")}}
+$("sl").oninput=e=>{stop();D=+e.target.value;draw()};$("pv").onclick=()=>{stop();D=Math.max(0,D-1);draw()};$("nx").onclick=()=>{stop();D=Math.min(DATA.dates.length-1,D+1);draw()};
+$("lt").onclick=()=>{stop();D=DATA.dates.length-1;draw()};$("pl").onclick=()=>{if(tm)return stop();if(D>=DATA.dates.length-1)D=0;$("pl").textContent=t("pause");tm=setInterval(()=>{if(D>=DATA.dates.length-1)return stop();D++;draw()},120)};
+function ask(q){let a;if(q==1){const l=DATA.sites.filter(s=>s.f[D]).map(s=>"- "+s.name+": "+[[1,"fd"],[2,"fw"],[4,"fl"]].filter(x=>s.f[D]&x[0]).map(x=>t(x[1])).join(", "));a=l.length?t("flagged")+" "+DATA.dates[D]+"\n"+l.join("\n"):t("none")}else a=t(q==2?"a2":"a3");$("ans").textContent=a}
+function ui(){document.documentElement.lang=L_;document.querySelectorAll("[data-t]").forEach(e=>e.textContent=t(e.dataset.t));
+$("lang").innerHTML=["en","fr","rw"].map(l=>`<button class="${l==L_?"on":""}" onclick="L_='${l}';ui()">${l.toUpperCase()}</button>`).join("");
+$("chips").innerHTML=[1,2,3].map(n=>`<button onclick="ask(${n})">${t("q"+n)}</button>`).join("");$("pl").textContent=tm?t("pause"):t("play");$("lt").textContent=t("late");$("ans").textContent="";draw()}
+ui();
+</script></body></html>
